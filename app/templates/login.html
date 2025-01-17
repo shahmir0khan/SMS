@@ -23,21 +23,25 @@
       {% endwith %}
 
       <!-- Login form -->
-       
       <form class="py-3 px-3" action="/login" method="post" style="max-width: 600px; margin: 0 auto; padding: 20px; font-size: 18px;">
         <div class="form-group">
-          <label class="form-label" for="user_id" style="color: white;">UserID</label>
-          <input type="text" class="form-control mb-2" name="user_id" id="user_id" >
+          <label class="form-label" for="user_id" style="color: white;">User  ID</label>
+          <input type="text" class="form-control mb-2" name="user_id" id="user_id" required>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="password" style="color: white;">Password</label>
-          <input type="password" class="form-control" id="password" name="password">
+          <input type="password" class="form-control" id="password" name="password" required>
         </div>
+
+        <!-- Centered reCAPTCHA widget -->
+        <div style="text-align: center; margin: 20px 0;">
+          <div style="text-align: center; margin-left: 130px ;" class="g-recaptcha" data-sitekey="{{ recaptcha_site_key }}"></div>
+        </div>
+
         <div style="width: 30%; margin: 0 auto;">
           <button type="submit" id="signbutton" class="form-control">Login</button>
         </div>
-        
         
       </form>
     </div>
@@ -48,10 +52,12 @@
   <script src="static/assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="static/assets/vendor/aos/aos.js"></script>
 
+  <!-- Google reCAPTCHA API -->
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
   <!-- Template Main JS File -->
   <script src="static/assets/js/main.js"></script>
 
 </body>
-
 
 {% endblock body %}

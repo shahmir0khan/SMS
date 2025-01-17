@@ -1,45 +1,48 @@
 {% extends 'login_base.html' %}
 {% block body %}
- 
+
 <body>
 
   <!-- ======= Intro Section ======= -->
   <section id="intro">
     <div class="intro-container" data-aos="zoom-in" data-aos-delay="100">
 
-      <h1 class="mb-4 pb-0" id="logh"><span style="color:rgb(160, 144, 164)">Login</span></h1>
-
-      
+      <h1 class="mb-4 pb-0" id="logh">
+        <span style="color:rgb(160, 144, 164)">Login</span>
+      </h1>
 
       <!-- Flash messages with alert styling -->
       {% with messages=get_flashed_messages(with_categories=true) %}
       {% if messages %}
       {% for category, message in messages %}
-
-      <div class="alert alert-{{category}} alert-dismissible fade show" role="alert">
-        {{message}}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
       </div>
-
       {% endfor %}
       {% endif %}
       {% endwith %}
 
       <!-- Login form -->
-       
       <form class="py-3 px-3" action="/login_faculty" method="post" style="max-width: 600px; margin: 0 auto; padding: 20px; font-size: 18px;">
+        
         <div class="form-group">
           <label class="form-label" for="email" style="color: white;">Email</label>
-          <input type="text" class="form-control mb-2" name="email" id="email" >
+          <input type="email" class="form-control mb-2" name="email" id="email" required>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="password" style="color: white;">Password</label>
-          <input type="password" class="form-control" id="password" name="password">
+          <input type="password" class="form-control" id="password" name="password" required>
         </div>
+
+        <!-- Centered reCAPTCHA widget -->
+        <div class="recaptcha-container" style="text-align: center; margin: 20px 0;">
+          <div style="text-align: center; margin: 20px 0; margin-left: 130px;"" class="g-recaptcha" data-sitekey="{{ recaptcha_site_key }}"></div>
+        </div>
+
         <div style="width: 30%; margin: 0 auto;">
           <button type="submit" id="signbutton" class="form-control">Login</button>
         </div>
-        
         
       </form>
     </div>
@@ -50,10 +53,12 @@
   <script src="static/assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="static/assets/vendor/aos/aos.js"></script>
 
+  <!-- Google reCAPTCHA API -->
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
   <!-- Template Main JS File -->
   <script src="static/assets/js/main.js"></script>
 
 </body>
-
 
 {% endblock body %}

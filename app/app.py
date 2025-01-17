@@ -1,12 +1,23 @@
-from flask import Flask,g, render_template, request, redirect, flash, url_for, session
+from flask import Flask, g, render_template, request, redirect, flash, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import mysql.connector
 from flask_login import login_user, logout_user, login_required, current_user
+import requests
+import random
+import string
+from flask_mail import Mail, Message
+
+
 
 # Initialize Flask application
 app = Flask(__name__)
-app.secret_key = 'your-secret-key'# secret key for securely signing session data
+app.secret_key = 'your-secret-key'  # secret key for securely signing session data
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost/shahmirdbms'
+
+# Your reCAPTCHA keys
+RECAPTCHA_SECRET_KEY = 'INSERT DECRET KEY HERE'
+RECAPTCHA_SITE_KEY = 'INSERT HERE'
 
 #global variables
 @app.before_request
@@ -14,7 +25,7 @@ def before_request():
     g.sem_id = 2
     g.registration = True # Assume registration is open by default
     g.faculty_id = session.get('faculty_id')
-    g.fees=session['fee_pr_crd_hr']
+    g.fees = 9000
 
 
 # Initialize SQLAlchemy(library of python )
@@ -209,25 +220,40 @@ def home():
 
 #?                 ///////////////////////////student//////////////////////////
 
-#login
 @app.route('/login', methods=['POST', 'GET'])
 def login():
     if request.method == "POST":
         user_id = request.form.get('user_id')
         password = request.form.get('password')
-        user = Student.query.filter_by(user_id=user_id).first()
+        recaptcha_response = request.form['g-recaptcha-response']
 
-        if user and user.check_password(password):
-            session['user_id'] = user.user_id
-            session['first_name'] = user.first_name
-            session['student_id2']=user.sno
-            
-            return redirect('/std_dashboard')  # Redirect to the main page after login
+        # Verify reCAPTCHA
+        payload = {
+            'secret': RECAPTCHA_SECRET_KEY,
+            'response': recaptcha_response
+        }
+        response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=payload)
+        result = response.json()
+
+        if result['success']:
+            user = Student.query.filter_by(user_id=user_id).first()
+
+            if user and user.check_password(password):
+                session['user_id'] = user.user_id
+                session['first_name'] = user.first_name
+                session['student_id2'] = user.sno
+                
+                return redirect('/std_dashboard')  # Redirect to the main page after login
+            else:
+                flash("Invalid credentials", "danger")
+                return render_template('login.html', recaptcha_site_key=RECAPTCHA_SITE_KEY)  
         else:
-            flash("Invalid credentials", "danger")
-            return render_template('login.html')    
+            flash("Please complete the CAPTCHA", "danger")
+            return render_template('login.html', recaptcha_site_key=RECAPTCHA_SITE_KEY)
 
-    return render_template('login.html') 
+    return render_template('login.html', recaptcha_site_key=RECAPTCHA_SITE_KEY)
+
+
 
 @app.route('/logout')
 def logout():
@@ -255,7 +281,7 @@ def add_student():
         email = request.form['email']
         cnic = request.form['cnic']
         address = request.form['address']
-        password = request.form['password']  
+        gpassword  = generate_random_password()
         
         student = Student(
             first_name=first_name,
@@ -270,7 +296,7 @@ def add_student():
             email=email,
             cnic=cnic,
             address=address,
-            password=password,       )
+            password=gpassword,       )
 
         db.session.add(student)
         db.session.commit()
@@ -394,7 +420,6 @@ def register_course():
 
     return render_template('register_course.html', user=user, courses=courses)  # Pass courses to the template
 
-# registered courses(STUDENT) 
 @app.route('/registered_courses')
 def registered_courses():
     if 'user_id' not in session:
@@ -409,21 +434,25 @@ def registered_courses():
         .join(Course)
         .join(Semester)
         .filter(Enrollment.student_sno == user.sno)
-        .all()    )
+        .all()
+    )
         
     courses_by_semester = {}
     for enrollment in enrollments:
-        semester_name = enrollment.semester.semester  
-        course_name = enrollment.course_enrollment.CourseName  
-        # courses=enrollment.course
+        semester_name = enrollment.semester.semester  # Get the semester name from the enrollment
+        course_name = enrollment.course_enrollment.CourseName  # Get the course name from the enrollment
 
         if semester_name not in courses_by_semester:
             courses_by_semester[semester_name] = []
         
         courses_by_semester[semester_name].append(course_name)
-        g.sem_id=session.get('semesterid1', None)
-        semester_name = Semester.query.filter_by(sem_id=g.sem_id).first()        
-    return render_template('registered_courses.html', user=user,courses_by_semester=courses_by_semester,semname=semester_name)
+
+    # Optionally, you can fetch the current semester name if needed
+    g.sem_id = session.get('semesterid1', None)
+    current_semester = Semester.query.filter_by(sem_id=g.sem_id).first() if g.sem_id else None
+
+    return render_template('registered_courses.html', user=user, courses_by_semester=courses_by_semester, semname=current_semester)
+
 
 # STUDENT drop semester
 @app.route('/drop_course/<string:course_name>/<int:sem_id>/<int:user_sno>', methods=['GET'])
@@ -653,29 +682,42 @@ def view_attendance():
 
 #?            ///////////////////////////           FACULTY       ////////////////////
 
-#login
 @app.route('/login_faculty', methods=['POST', 'GET'])
 def login_faculty():
     if request.method == "POST":
         email = request.form.get('email')
         password = request.form.get('password')
-        user = Faculty.query.filter_by(email=email).first()
-        if not user:
-            flash("User not exist", "primary")
-            return render_template('login_faculty.html')  
+        recaptcha_response = request.form['g-recaptcha-response']
 
+        # Verify reCAPTCHA
+        payload = {
+            'secret': RECAPTCHA_SECRET_KEY,
+            'response': recaptcha_response
+        }
+        response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=payload)
+        result = response.json()
 
-        if user and user.check_password(password):
-            session['email'] = user.email
-            session['first_name'] = user.first_name
-            session['faculty_id'] = user.sno 
+        if result['success']:
+            user = Faculty.query.filter_by(email=email).first()
             
-            return redirect('/faculty_dashboard')  
-        else:
-            flash("Invalid credentials", "danger")
-            return render_template('login_faculty.html')    
+            if not user:
+                flash("User  does not exist", "primary")
+                return render_template('login_faculty.html')  
 
-    return render_template('login_faculty.html') 
+            if user.check_password(password):
+                session['email'] = user.email
+                session['first_name'] = user.first_name
+                session['faculty_id'] = user.sno 
+                
+                return redirect('/faculty_dashboard')  
+            else:
+                flash("Invalid credentials", "danger")
+                return render_template('login_faculty.html')    
+        else:
+            flash("Please complete the CAPTCHA", "danger")
+            return render_template('login_faculty.html', recaptcha_site_key=RECAPTCHA_SITE_KEY)    
+
+    return render_template('login_faculty.html', recaptcha_site_key=RECAPTCHA_SITE_KEY)
 
 #LOGOUT
 @app.route('/logout_faculty')
@@ -689,7 +731,6 @@ def faculty_dashboard():
     user = Faculty.query.filter_by(email=session['email']).first() if 'email' in session else None
     return render_template('faculty_dashboard.html', user=user)  # Adjusted render
 
-# REGISTER FACULTY
 @app.route('/add_faculty', methods=['GET', 'POST'])
 def add_faculty():
     if request.method == 'POST':
@@ -700,11 +741,14 @@ def add_faculty():
         gender = request.form['gender']
         address = request.form['address']
         department = request.form['department']
-        password = request.form['password']   
 
+        # Generate a random password
+        generated_password = generate_random_password()
+
+        # Create a new Faculty instance
         faculty = Faculty(
             email=email,
-            password=password,   
+            password=generated_password,  # Use the generated password
             first_name=first_name,
             last_name=last_name,
             phone=phone,
@@ -713,12 +757,24 @@ def add_faculty():
             department=department
         )
 
+        # Add the faculty to the database
         db.session.add(faculty)
         db.session.commit()
-        flash('Faculty data has been submitted successfully!', 'success')
 
-    allFaculty = Faculty.query.all()
-    return render_template('add_faculty.html', allFaculty=allFaculty)
+        # Flash a success message
+        flash('Faculty data has been submitted successfully! The generated password is: ' + generated_password, 'success')
+
+        # Optionally, you can redirect to another page or render the same page
+        return redirect(url_for('add_faculty'))  # Redirect to the same page or another page
+
+    # If GET request, render the form
+    return render_template('add_faculty.html', allFaculty=Faculty.query.all(), generated_password=None)
+
+def generate_random_password(length=8):
+    """Generate a random password with a mix of letters, digits, and punctuation."""
+    characters = string.ascii_letters + string.digits + string.punctuation
+    password = ''.join(random.choice(characters) for i in range(length))
+    return password
 
 #REGISTERED FACULTY DATA
 @app.route('/faculty_data', methods=['GET'])
@@ -935,22 +991,35 @@ def login_admin():
     if request.method == "POST":
         user_name = request.form.get('user_name')
         password = request.form.get('password')
-        user = Admin.query.filter_by(user_name=user_name).first()
-        if not user:
-            flash("User not exist", "primary")
-            return render_template('login_admin.html')  
+        recaptcha_response = request.form['g-recaptcha-response']
 
+        # Verify reCAPTCHA
+        payload = {
+            'secret': RECAPTCHA_SECRET_KEY,
+            'response': recaptcha_response
+        }
+        response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=payload)
+        result = response.json()
 
-        if user and user.check_password(password):
-            session['user_name'] = user.user_name
-            
-            
-            return redirect('/admin_dashboard')  
+        if result['success']:
+            user = Admin.query.filter_by(user_name=user_name).first()
+            if not user:
+                flash("User  does not exist", "primary")
+                return render_template('login_admin.html',recaptcha_site_key=RECAPTCHA_SITE_KEY)   
+
+            if user.check_password(password):
+                session['user_name'] = user.user_name
+                
+                return redirect('/admin_dashboard')  
+            else:
+                flash("Invalid credentials", "danger")
+                return render_template('login_admin.html',recaptcha_site_key=RECAPTCHA_SITE_KEY)     
         else:
-            flash("Invalid credentials", "danger")
-            return render_template('login_admin.html')    
+            flash("Please complete the CAPTCHA", "danger")
+            return render_template('login_admin.html',recaptcha_site_key=RECAPTCHA_SITE_KEY)    
 
-    return render_template('login_admin.html') 
+    return render_template('login_admin.html', recaptcha_site_key=RECAPTCHA_SITE_KEY)
+
 
 #LOGOUT
 @app.route('/logout_admin')
@@ -1133,5 +1202,5 @@ def close_register():
 
 
 
-# if __name__ == "__main__":
-#     app.run(debug=True, port=8000)
+if __name__ == "__main__":
+    app.run(debug=True, port=8000)
